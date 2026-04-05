@@ -57,6 +57,8 @@
             height: 100dvh; 
             z-index: -1;
             pointer-events: none;
+            /* Hardware acceleration hint */
+            transform: translateZ(0); 
         }
 
         /* Loading Screen */
@@ -108,6 +110,8 @@
             transform-style: preserve-3d;
             transition: transform 0.25s ease-out;
             z-index: 10;
+            /* Hardware acceleration to prevent DOM repaints */
+            will-change: transform;
         }
 
         .glass-panel:hover {
@@ -181,7 +185,6 @@
 </head>
 <body class="antialiased selection:bg-white/30 selection:text-white">
 
-    <!-- Loading Screen -->
     <div id="loader">
         <div class="loader-text">CODIFYING</div>
         <div class="loader-bar-container">
@@ -712,7 +715,8 @@
             statutes: { bg: '#02110a', accent: '#10b981', fog: 0x02110a, lightA: 0x10b981, lightB: 0xb45309 }
         };
 
-        const lenis = new Lenis({ smoothWheel: true, smoothTouch: true, lerp: 0.1 });
+        // Initialize Lenis. smoothTouch is explicitly FALSE to preserve perfect native momentum scroll on mobile
+        const lenis = new Lenis({ smoothWheel: true, smoothTouch: false, lerp: 0.1 });
         lenis.on('scroll', ScrollTrigger.update);
         lenis.on('scroll', (e) => {
             const progress = isNaN(e.progress) ? 0 : e.progress;
@@ -724,8 +728,12 @@
         // ==========================================
         const container = document.getElementById('webgl-container');
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        
+        // **PERFORMANCE FIX** Cap DPR to 1.5. A 3x retina display will kill mobile GPUs on the fragment shader blur.
+        const dpr = Math.min(window.devicePixelRatio, 1.5);
+        renderer.setPixelRatio(dpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
+        
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
@@ -740,6 +748,9 @@
         const dirLightA = new THREE.DirectionalLight(themes.main.lightA, 3.5); 
         dirLightA.position.set(20, 20, 10); 
         dirLightA.castShadow = true;
+        // Optimize shadow map resolution
+        dirLightA.shadow.mapSize.width = 1024;
+        dirLightA.shadow.mapSize.height = 1024;
         dirLightA.shadow.camera.top = 20; dirLightA.shadow.camera.bottom = -20;
         dirLightA.shadow.camera.left = -20; dirLightA.shadow.camera.right = 20;
         scene.add(dirLightA);
@@ -1126,7 +1137,7 @@
         // 5. POST-PROCESSING (THE LIQUID GLASS SHADER)
         // ==========================================
         
-        let renderTarget = new THREE.WebGLRenderTarget(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
+        let renderTarget = new THREE.WebGLRenderTarget(window.innerWidth * dpr, window.innerHeight * dpr);
         const MAX_BOXES = 36; 
         const boxUniforms = new Float32Array(MAX_BOXES * 4); 
 
@@ -1136,7 +1147,7 @@
         const postMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 tDiffuse: { value: renderTarget.texture },
-                uResolution: { value: new THREE.Vector2(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio()) },
+                uResolution: { value: new THREE.Vector2(window.innerWidth * dpr, window.innerHeight * dpr) },
                 uBoxes: { value: boxUniforms },
                 uBoxCount: { value: 0 },
                 uThemeColor: { value: new THREE.Color(themes.main.accent) }
@@ -1187,9 +1198,11 @@
                                     
                                     vec4 blurColor = vec4(0.0);
                                     float total = 0.0;
-                                    float blurRadius = 2.0; 
-                                    for (float x = -2.0; x <= 2.0; x++) {
-                                        for (float y = -2.0; y <= 2.0; y++) {
+                                    
+                                    // PERFORMANCE FIX: Reduced from 25 taps to 9 taps for mobile GPUs
+                                    float blurRadius = 4.0; 
+                                    for (float x = -1.0; x <= 1.0; x++) {
+                                        for (float y = -1.0; y <= 1.0; y++) {
                                             vec2 offset = vec2(x, y) * blurRadius / uResolution;
                                             blurColor += texture2D(tDiffuse, lensUv + offset);
                                             total += 1.0;
@@ -1217,11 +1230,11 @@
         postScene.add(postQuad);
 
         // ==========================================
-        // 6. DOM-TO-WEBGL TRACKING & PROJECTION
+        // 6. PERFECT DOM-TO-WEBGL SYNC
         // ==========================================
         function trackDOMBoxes() {
             const targets = document.querySelectorAll('.shader-target');
-            let count = 0; const dpr = renderer.getPixelRatio();
+            let count = 0; 
             targets.forEach((el) => {
                 if (count >= MAX_BOXES) return;
                 const rect = el.getBoundingClientRect();
@@ -1312,6 +1325,7 @@
             }
             particlesMesh.rotation.y = t * 0.015;
 
+            // Tracking happens immediately before rendering
             trackDOMBoxes();
             updateAnchoredModels(t);
 
@@ -1319,6 +1333,7 @@
             renderer.setRenderTarget(null); renderer.clear(); renderer.render(postScene, postCamera);
         }
         
+        // Locked onto GSAP Ticker to perfectly synchronize WebGL and Native Mobile Scroll
         gsap.ticker.add((time) => {
             lenis.raf(time * 1000);
             animate();
@@ -1327,10 +1342,21 @@
         // ==========================================
         // 8. RESIZE & ROUTING LOGIC
         // ==========================================
+        
+        let lastWidth = window.innerWidth;
+        let lastHeight = window.innerHeight;
+
         window.addEventListener('resize', () => {
-            const w = window.innerWidth; const h = window.innerHeight; const dpr = Math.min(window.devicePixelRatio, 2);
-            camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
-            renderTarget.setSize(w * dpr, h * dpr); postMaterial.uniforms.uResolution.value.set(w * dpr, h * dpr);
+            const w = window.innerWidth; 
+            const h = window.innerHeight; 
+            
+            // PERFORMANCE FIX: Only resize WebGL if width changes (orientation) or massive height shift.
+            // Prevents massive tearing/lag when mobile browser address bar auto-hides during scroll.
+            if (w !== lastWidth || Math.abs(h - lastHeight) > 150) {
+                lastWidth = w; lastHeight = h;
+                camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+                renderTarget.setSize(w * dpr, h * dpr); postMaterial.uniforms.uResolution.value.set(w * dpr, h * dpr);
+            }
         });
 
         function initScrollAnimations(viewId) {
@@ -1358,7 +1384,6 @@
             });
         }
 
-        // SMOOTH CROSSFADE & SCROLL TRANSITION
         let isTransitioning = false;
 
         window.switchView = function(viewName) {
@@ -1369,15 +1394,12 @@
             const newView = document.getElementById(`view-${viewName}`);
             const t = themes[viewName];
 
-            // 1. Smooth Scroll to Top
             lenis.scrollTo(0, { duration: 1.2, ease: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
 
             const tl = gsap.timeline({ onComplete: () => isTransitioning = false });
 
-            // 2. Camera pulls back slightly for cinematic effect
             tl.to(camera.position, { z: 30, duration: 0.6, ease: "power2.in" }, 0);
 
-            // 3. Fade out old view
             tl.to(oldView, { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 0)
               .call(() => {
                   oldView.style.display = 'none';
@@ -1399,43 +1421,33 @@
                   
                   initScrollAnimations(`view-${viewName}`);
               })
-              // 4. Push camera back in & morph colors smoothly
               .to(camera.position, { z: 25, duration: 1.2, ease: "power2.out" }, 0.6)
               .to(postMaterial.uniforms.uThemeColor.value, { r: new THREE.Color(t.accent).r, g: new THREE.Color(t.accent).g, b: new THREE.Color(t.accent).b, duration: 1.2, ease: "power2.out" }, 0.6)
               .to(scene.fog.color, { r: new THREE.Color(t.fog).r, g: new THREE.Color(t.fog).g, b: new THREE.Color(t.fog).b, duration: 1.2, ease: "power2.out" }, 0.6)
               .to(dirLightA.color, { r: new THREE.Color(t.lightA).r, g: new THREE.Color(t.lightA).g, b: new THREE.Color(t.lightA).b, duration: 1.2, ease: "power2.out" }, 0.6)
               .to(dirLightB.color, { r: new THREE.Color(t.lightB).r, g: new THREE.Color(t.lightB).g, b: new THREE.Color(t.lightB).b, duration: 1.2, ease: "power2.out" }, 0.6)
-              // 5. Fade in new view
               .to(newView, { opacity: 1, duration: 0.8, ease: "power2.out" }, 0.8)
               .call(() => {
                   newView.classList.add('active');
               });
         };
 
-        // INITIAL LOAD WITH LOADER FADEOUT
         window.onload = () => { 
             const loaderBar = document.getElementById('loader-bar');
             const loader = document.getElementById('loader');
             
-            // Wait for textures to process, then animate bar
             gsap.to(loaderBar, { 
                 width: '100%', 
                 duration: 1.8, 
                 ease: 'power3.inOut',
                 onComplete: () => {
-                    // Fade out loader
                     loader.style.opacity = '0';
                     setTimeout(() => {
                         loader.style.display = 'none';
                         initScrollAnimations('view-main');
                         
-                        // Entrance animation for hero content
                         gsap.from("#view-main header h1, #view-main header p", {
-                            y: 30,
-                            opacity: 0,
-                            duration: 1.2,
-                            stagger: 0.2,
-                            ease: "power3.out"
+                            y: 30, opacity: 0, duration: 1.2, stagger: 0.2, ease: "power3.out"
                         });
                     }, 800); 
                 }
