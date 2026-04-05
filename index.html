@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Evolution of Family Law</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Main Theme */
+            --theme-bg: #050a15;
+            --theme-accent: #d4af37;
+            --theme-accent-glow: rgba(212, 175, 55, 0.5);
+            
+            /* Cases Theme */
+            --cases-bg: #110505;
+            --cases-accent: #e11d48;
+            --cases-accent-glow: rgba(225, 29, 72, 0.5);
+
+            /* Statutes Theme */
+            --statutes-bg: #02110a;
+            --statutes-accent: #10b981;
+            --statutes-accent-glow: rgba(16, 185, 129, 0.5);
+
+            /* Active Variables (Controlled by JS) */
+            --current-bg: var(--theme-bg);
+            --current-accent: var(--theme-accent);
+            --current-accent-glow: var(--theme-accent-glow);
+        }
+        
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--current-bg);
+            color: #e2e8f0;
+            cursor: default;
+            transition: background-color 1s ease;
+        }
+
+        .serif { font-family: 'Cormorant Garamond', serif; }
+        
+        /* 3D Canvas Background */
+        #webgl-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100dvh; 
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Loading Screen */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background-color: #050a15;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease-out;
+        }
+        .loader-text {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 2.5rem;
+            color: #d4af37;
+            letter-spacing: 0.2em;
+            margin-bottom: 1.5rem;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .loader-bar-container {
+            width: 250px;
+            height: 2px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .loader-bar {
+            height: 100%;
+            width: 0%;
+            background: #d4af37;
+            box-shadow: 0 0 10px #d4af37;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* GHOST DOM ELEMENTS (Liquid Shader Targets) */
+        .shader-target {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.25s ease-out;
+            z-index: 10;
+        }
+
+        .glass-panel:hover {
+            transform: translateY(-8px) scale(1.02);
+        }
+        .interactive-callout {
+            cursor: pointer;
+        }
+        .interactive-callout:hover {
+            transform: translateX(10px) scale(1.02);
+        }
+        .interactive-callout > * { position: relative; z-index: 1; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--current-bg); transition: background 1s; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--current-accent); }
+        
+        /* Progress Bar & Accents */
+        .glow-node {
+            background-color: var(--current-accent);
+            box-shadow: 0 0 15px var(--current-accent), 0 0 30px var(--current-accent-glow);
+            transition: background-color 1s ease, box-shadow 1s ease;
+        }
+        .focus-tag {
+            background: linear-gradient(90deg, rgba(255,255,255,0.1), rgba(255,255,255,0));
+            border-left: 2px solid var(--current-accent);
+            transition: border-color 1s ease;
+        }
+
+        /* Dynamic Text Colors */
+        .text-accent { color: var(--current-accent); transition: color 1s ease; }
+        .border-accent { border-color: var(--current-accent); transition: border-color 1s ease; }
+
+        /* View Routing Utilities */
+        .view-section {
+            display: none;
+            opacity: 0;
+        }
+        .view-section.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* Back Button */
+        .back-btn {
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            z-index: 100;
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            transform: translateY(-100px);
+        }
+        .back-btn.visible { transform: translateY(0); }
+        .back-btn:hover { color: var(--current-accent); }
+
+        /* SCENE ANCHORS */
+        .scene-anchor {
+            pointer-events: none;
+            min-height: 400px;
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-white/30 selection:text-white">
+
+    <!-- Loading Screen -->
+    <div id="loader">
+        <div class="loader-text">CODIFYING</div>
+        <div class="loader-bar-container">
+            <div id="loader-bar" class="loader-bar"></div>
+        </div>
+    </div>
+
+    <div id="progress-bar" class="fixed top-0 left-0 h-1 z-50 w-0 transition-all duration-100 ease-out glow-node"></div>
+    <div id="webgl-container"></div>
+
+    <button id="back-button" class="back-btn shader-target" onclick="switchView('main')">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        Back to Eras
+    </button>
+
+    <main class="relative z-10 w-full overflow-hidden">
+        
+        <!-- ==========================================
+             VIEW: MAIN TIMELINE
+             ========================================== -->
+        <div id="view-main" class="view-section active">
+            <header class="min-h-screen flex flex-col justify-center items-center text-center px-6 relative">
+                <div class="glass-panel shader-target p-8 md:p-12 rounded-3xl max-w-4xl mx-auto w-full">
+                    <span class="text-accent font-bold tracking-[0.3em] text-xs md:text-sm uppercase mb-4 block">A Historical Perspective</span>
+                    <h1 class="serif text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 drop-shadow-2xl leading-tight">
+                        The Evolution of <br/><span class="text-accent">Family Law</span>
+                    </h1>
+                    <p class="text-base md:text-xl text-gray-300 max-w-2xl mx-auto font-light tracking-wide leading-relaxed">
+                        Tracing the transformation of the family from a patriarchal unit of lineage and property to a modern institution of equality, autonomy, and diverse relationships.
+                    </p>
+                    <p class="serif italic text-accent mt-8 text-lg md:text-2xl border-t border-white/20 pt-6 max-w-lg mx-auto">
+                        "The movement of the progressive societies has hitherto been a movement from Status to Contract."<br/>
+                        <span class="text-sm font-sans font-bold text-gray-400 mt-2 block uppercase tracking-widest not-italic">— Sir Henry Maine</span>
+                    </p>
+                </div>
+                <div class="absolute bottom-10 animate-bounce cursor-pointer opacity-70 hover:opacity-100 transition-opacity">
+                    <span class="block text-xs text-accent tracking-widest uppercase mb-2">Scroll</span>
+                    <svg class="w-8 h-8 text-accent mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                </div>
+            </header>
+
+            <section class="py-20 md:py-32 px-6 md:px-8 max-w-7xl mx-auto relative timeline-container pl-12 md:pl-8">
+                <div class="absolute left-4 md:left-1/2 transform md:-translate-x-1/2 h-full w-px bg-white/20 top-0"></div>
+
+                <!-- Era 1: Antiquity -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24 md:mb-32">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 md:p-10 rounded-2xl relative w-full">
+                            <span class="text-accent font-bold tracking-widest text-xs uppercase">1750 BC - 500 AD</span>
+                            <h3 class="serif text-3xl md:text-4xl mt-3 mb-4 text-white">Antiquity & Patriarchal Authority</h3>
+                            <p class="text-gray-300 leading-relaxed text-sm md:text-base mb-4">
+                                Family law originated as a system to regulate lineage, inheritance, and patriarchal control. The Roman doctrine of <em>Patria Potestas</em> gave the eldest male absolute control over marriage, property, and children. Adoption existed mainly to preserve lineage.
+                            </p>
+                            <div class="flex flex-wrap gap-2 justify-start md:justify-end">
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Marriage as Property Alliance</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Sons-Only Inheritance</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Absolute Paternal Authority</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[400px] order-1 md:order-2" data-view="main" data-index="0"></div>
+                </div>
+
+                <!-- Era 2: Religion & Lineage -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24 md:mb-32">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[400px] order-1 md:order-1" data-view="main" data-index="1"></div>
+                    
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 md:p-10 rounded-2xl relative w-full">
+                            <span class="text-accent font-bold tracking-widest text-xs uppercase">12th - 18th Century</span>
+                            <h3 class="serif text-3xl md:text-4xl mt-3 mb-4 text-white">Religion & Indissoluble Marriage</h3>
+                            <p class="text-gray-300 leading-relaxed text-sm md:text-base mb-4">
+                                Religious institutions dominated family relations. Marriage became sacramental and largely indissoluble. Women’s legal identity merged into the husband’s through doctrines like <em>coverture</em>. Inheritance depended strictly on legitimacy.
+                            </p>
+                            <div class="flex flex-wrap gap-2 justify-start">
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Indissoluble Sacrament</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Loss of Property Rights</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Legitimacy Dictates Inheritance</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Era 3: 19th C Reform -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24 md:mb-32">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 md:p-10 rounded-2xl relative w-full">
+                            <span class="text-accent font-bold tracking-widest text-xs uppercase">19th Century</span>
+                            <h3 class="serif text-3xl md:text-4xl mt-3 mb-4 text-white">Reform, Civil Divorce & Property</h3>
+                            <p class="text-gray-300 leading-relaxed text-sm md:text-base mb-4">
+                                Industrialization challenged rigid structures. Civil courts began regulating marriage. In India, colonial reforms like the <strong>Hindu Widows' Remarriage Act (1856)</strong> and the <strong>Child Marriage Restraint Act (1929)</strong> shifted focus to social welfare.
+                            </p>
+                            <div class="flex flex-wrap gap-2 justify-start md:justify-end mb-5">
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Civil Divorce Emerges</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Married Women's Property Rights</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Early Statutory Adoption</span>
+                            </div>
+                            <div class="interactive-callout shader-target p-4 rounded-lg text-left flex justify-between items-center group" onclick="switchView('statutes')">
+                                <div>
+                                    <p class="text-xs text-accent uppercase tracking-wider font-semibold mb-1">Explore Statutes</p>
+                                    <p class="text-sm text-white font-medium">Early Reform Acts (1856 - 1929)</p>
+                                </div>
+                                <svg class="w-6 h-6 text-accent transform group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[400px] order-1 md:order-2" data-view="main" data-index="2"></div>
+                </div>
+
+                <!-- Era 4: Mid 20th C Codification -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24 md:mb-32">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[400px] order-1 md:order-1" data-view="main" data-index="3"></div>
+                    
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 md:p-10 rounded-2xl relative w-full">
+                            <span class="text-accent font-bold tracking-widest text-xs uppercase">Mid-20th Century</span>
+                            <h3 class="serif text-3xl md:text-4xl mt-3 mb-4 text-white">Codification & Secularism</h3>
+                            <p class="text-gray-300 leading-relaxed text-sm md:text-base mb-4">
+                                Post-independence, the <strong>Special Marriage Act (1954)</strong> provided a secular alternative to religious laws. Following this, the <strong>Hindu Code Reforms (1955-56)</strong> profoundly modernized personal laws, introducing monogamy and succession equality.
+                            </p>
+                            <div class="flex flex-wrap gap-2 justify-start mb-5">
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Secular Marriage Frameworks</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Codified Inheritance</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Statutory Divorce Rights</span>
+                            </div>
+                            <div class="interactive-callout shader-target p-4 rounded-lg text-left flex justify-between items-center group" onclick="switchView('statutes')">
+                                <div>
+                                    <p class="text-xs text-accent uppercase tracking-wider font-semibold mb-1">Codification Milestones</p>
+                                    <p class="text-sm text-white font-medium">HMA, HSA, HAMA (1955-56)</p>
+                                </div>
+                                <svg class="w-6 h-6 text-accent transform group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Era 5: Late 20th C No-Fault -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24 md:mb-32">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 md:p-10 rounded-2xl relative w-full">
+                            <span class="text-accent font-bold tracking-widest text-xs uppercase">Late 20th Century</span>
+                            <h3 class="serif text-3xl md:text-4xl mt-3 mb-4 text-white">Rights-Based Law & No-Fault Divorce</h3>
+                            <p class="text-gray-300 leading-relaxed text-sm md:text-base mb-4">
+                                Divorce evolved from fault-based punishment to mutual consent. Courts began applying <strong>Article 14 & 15</strong> of the Constitution to protect marginalized spouses. <em>Shah Bano</em> established secular maintenance rights across religious lines via CrPC.
+                            </p>
+                            <div class="flex flex-wrap gap-2 justify-start md:justify-end mb-5">
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Mutual Consent Divorce</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Financial Redistribution</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Child Welfare Priority</span>
+                            </div>
+                            <div class="interactive-callout shader-target p-4 rounded-lg text-left flex justify-between items-center group" onclick="switchView('cases')">
+                                <div>
+                                    <p class="text-xs text-accent uppercase tracking-wider font-semibold mb-1">Explore Cases</p>
+                                    <p class="text-sm text-white font-medium">Shah Bano & White v. White</p>
+                                </div>
+                                <svg class="w-6 h-6 text-accent transform group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[400px] order-1 md:order-2" data-view="main" data-index="4"></div>
+                </div>
+
+                <!-- Era 6: Modern Constitutional -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[400px] order-1 md:order-1" data-view="main" data-index="5"></div>
+                    
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 md:p-10 rounded-2xl relative w-full">
+                            <span class="text-accent font-bold tracking-widest text-xs uppercase">2000s - Present</span>
+                            <h3 class="serif text-3xl md:text-4xl mt-3 mb-4 text-white">Constitutional Equality & Article 21</h3>
+                            <p class="text-gray-300 leading-relaxed text-sm md:text-base mb-4">
+                                Driven by <strong>Article 21 (Right to Life & Dignity)</strong>, courts aggressively scrutinized personal laws. This era saw the invalidation of instant triple talaq (*Shayara Bano*), absolute coparcenary rights for daughters (*Vineeta Sharma*), and the decriminalization of homosexuality (*Navtej Johar*).
+                            </p>
+                            <div class="flex flex-wrap gap-2 justify-start mb-5">
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Constitutional Scrutiny</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Gender-Neutral Inheritance</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Decriminalized Relationships</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Era 7: The Future -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-12">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 md:p-10 rounded-2xl relative w-full border-t border-accent/50 shadow-[0_0_40px_var(--current-accent-glow)]">
+                            <span class="text-accent font-bold tracking-widest text-xs uppercase">Looking Forward</span>
+                            <h3 class="serif text-3xl md:text-4xl mt-3 mb-4 text-white">The Future: UCC & Diverse Families</h3>
+                            <p class="text-gray-300 leading-relaxed text-sm md:text-base mb-4">
+                                The horizon of family law includes intense legislative debates surrounding the implementation of a <strong>Uniform Civil Code (Article 44)</strong>. Simultaneously, courts are recognizing non-traditional relationships, affording legal protections to live-in partners (*Indra Sarma*) and deliberating the legal recognition of queer family units (*Supriyo*).
+                            </p>
+                            <div class="flex flex-wrap gap-2 justify-start md:justify-end mb-5">
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Article 44 (UCC) Debate</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Live-in Protections (DVA)</span>
+                                <span class="focus-tag px-3 py-1 text-xs text-gray-200">Marriage Equality Debates</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[400px] order-1 md:order-2" data-view="main" data-index="6"></div>
+                </div>
+
+            </section>
+
+            <!-- INTEGRATED EVOLUTION THEMES MATRIX -->
+            <section class="py-12 px-6 md:px-8 max-w-7xl mx-auto relative z-10 mb-10 era-item">
+                <div class="text-center mb-10">
+                    <h2 class="serif text-4xl text-white">The Evolution Matrix</h2>
+                    <p class="text-accent text-sm tracking-widest uppercase mt-2">Integrated Jurisprudential Themes</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="glass-panel shader-target p-6 rounded-xl">
+                        <h4 class="text-white font-semibold mb-3 border-b border-white/10 pb-2">Marriage</h4>
+                        <p class="text-sm text-gray-300 leading-relaxed">Property alliance <span class="text-accent font-bold">→</span> Sacrament <span class="text-accent font-bold">→</span> Civil contract <span class="text-accent font-bold">→</span> Partnership <span class="text-accent font-bold">→</span> Equality-based union</p>
+                    </div>
+                    <div class="glass-panel shader-target p-6 rounded-xl">
+                        <h4 class="text-white font-semibold mb-3 border-b border-white/10 pb-2">Divorce</h4>
+                        <p class="text-sm text-gray-300 leading-relaxed">Impossible <span class="text-accent font-bold">→</span> Fault-based <span class="text-accent font-bold">→</span> Statutory <span class="text-accent font-bold">→</span> Mutual consent <span class="text-accent font-bold">→</span> Autonomy-based dissolution</p>
+                    </div>
+                    <div class="glass-panel shader-target p-6 rounded-xl">
+                        <h4 class="text-white font-semibold mb-3 border-b border-white/10 pb-2">Inheritance</h4>
+                        <p class="text-sm text-gray-300 leading-relaxed">Male-line succession <span class="text-accent font-bold">→</span> Limited women’s rights <span class="text-accent font-bold">→</span> Codified succession <span class="text-accent font-bold">→</span> Equal coparcenary <span class="text-accent font-bold">→</span> Gender-neutral rights</p>
+                    </div>
+                    <div class="glass-panel shader-target p-6 rounded-xl">
+                        <h4 class="text-white font-semibold mb-3 border-b border-white/10 pb-2">Adoption</h4>
+                        <p class="text-sm text-gray-300 leading-relaxed">Lineage continuation <span class="text-accent font-bold">→</span> Religious restriction <span class="text-accent font-bold">→</span> Statutory adoption <span class="text-accent font-bold">→</span> Child welfare model <span class="text-accent font-bold">→</span> Inclusive parenting</p>
+                    </div>
+                    <div class="glass-panel shader-target p-6 rounded-xl lg:col-span-2">
+                        <h4 class="text-white font-semibold mb-3 border-b border-white/10 pb-2">Family Structure</h4>
+                        <p class="text-sm text-gray-300 leading-relaxed">Patriarchal hierarchy <span class="text-accent font-bold">→</span> Religious family <span class="text-accent font-bold">→</span> Contractual marriage <span class="text-accent font-bold">→</span> Nuclear equality <span class="text-accent font-bold">→</span> Diverse modern families</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ==========================================
+             VIEW: CASES TIMELINE
+             ========================================== -->
+        <div id="view-cases" class="view-section pt-32 pb-10 px-6 md:px-8 max-w-7xl mx-auto">
+            <div class="text-center mb-24">
+                <h2 class="serif text-5xl md:text-6xl font-bold text-white mb-4">Integrated <span class="text-accent">Jurisprudence</span></h2>
+                <p class="text-gray-300 max-w-2xl mx-auto">The constitutional courtroom battles that dismantled oppressive traditions and forged new rights for families worldwide.</p>
+            </div>
+
+            <div class="space-y-12 relative timeline-container pl-12 md:pl-0">
+                <div class="absolute left-4 md:left-1/2 transform md:-translate-x-1/2 h-full w-px bg-white/20 top-0"></div>
+
+                <!-- Case 0: Hyde -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">1866 • Common Law Foundation</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Hyde v. Hyde & Woodmansee</h4>
+                            <p class="text-sm text-gray-300">Defined marriage narrowly and excluded non-traditional unions, establishing a rigid precedent that took a century to dismantle.</p>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-2" data-view="cases" data-index="0"></div>
+                </div>
+
+                <!-- Case 1: Shah Bano -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-1" data-view="cases" data-index="1"></div>
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">1985 • Supreme Court of India</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Mohd. Ahmed Khan v. Shah Bano Begum</h4>
+                            <p class="text-sm text-gray-300">A monumental ruling expanding maintenance rights for divorced women beyond religious boundaries under secular criminal law (Section 125 CrPC).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Case 2: White v White -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">2000 • UK House of Lords</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">White v. White</h4>
+                            <p class="text-sm text-gray-300">Recognized non-financial contributions in divorce settlements, establishing the "yardstick of equality" for homemakers and breadwinners alike.</p>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-2" data-view="cases" data-index="2"></div>
+                </div>
+
+                <!-- Case 3: Indra Sarma (Live-in) -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-1" data-view="cases" data-index="3"></div>
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">2013 • Supreme Court of India</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Indra Sarma v. V.K.V. Sarma</h4>
+                            <p class="text-sm text-gray-300">A landmark ruling under the Domestic Violence Act (2005) interpreting live-in relationships that are "in the nature of marriage," granting vital legal protections to non-marital partners.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Case 4: Shayara Bano -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">2017 • Supreme Court of India</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Shayara Bano v. Union of India</h4>
+                            <p class="text-sm text-gray-300">Invalidated the practice of instant triple talaq (talaq-e-biddat) under Article 14, profoundly reforming Muslim divorce law and upholding constitutional equality.</p>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-2" data-view="cases" data-index="4"></div>
+                </div>
+
+                <!-- Case 5: Navtej Johar -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-1" data-view="cases" data-index="5"></div>
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">2018 • Supreme Court of India</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Navtej Singh Johar v. Union of India</h4>
+                            <p class="text-sm text-gray-300">Decriminalized consensual homosexual acts using Articles 14, 15 & 21, laying the essential constitutional foundation for LGBTQ+ family and relationship rights.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Case 6: Vineeta Sharma -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">2020 • Supreme Court of India</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Vineeta Sharma v. Rakesh Sharma</h4>
+                            <p class="text-sm text-gray-300">Cemented equal inheritance rights, ruling that daughters become equal coparceners in Hindu ancestral property by birth, regardless of when the father died.</p>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-2" data-view="cases" data-index="6"></div>
+                </div>
+
+                <!-- Case 7: Supriyo -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-12">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-1" data-view="cases" data-index="7"></div>
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">2023 • Supreme Court of India</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Supriyo v. Union of India</h4>
+                            <p class="text-sm text-gray-300">A monumental debate on marriage equality. Though same-sex marriage wasn't legalized, it catalyzed profound national discussion on recognizing diverse family units.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ==========================================
+             VIEW: STATUTES TIMELINE
+             ========================================== -->
+        <div id="view-statutes" class="view-section pt-32 pb-10 px-6 md:px-8 max-w-7xl mx-auto">
+            <div class="text-center mb-24">
+                <h2 class="serif text-5xl md:text-6xl font-bold text-white mb-4">Statutory <span class="text-accent">Evolution</span></h2>
+                <p class="text-gray-300 max-w-2xl mx-auto">The legislative acts, codes, and international treaties that codified the changing definitions of family and rights.</p>
+            </div>
+
+            <div class="space-y-12 relative timeline-container pl-12 md:pl-0">
+                <div class="absolute left-4 md:left-1/2 transform md:-translate-x-1/2 h-full w-px bg-white/20 top-0"></div>
+
+                <!-- Statute 0: 1856 -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">1856 • Early Reform Era</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Hindu Widows' Remarriage Act</h4>
+                            <p class="text-sm text-gray-300">A monumental shift from religious orthodoxy to social reform, ensuring marriage reform and women’s autonomy under the law.</p>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-2" data-view="statutes" data-index="0"></div>
+                </div>
+
+                <!-- Statute 1: 1929 -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-1" data-view="statutes" data-index="1"></div>
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">1929 • Pre-Independence</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Child Marriage Restraint Act</h4>
+                            <p class="text-sm text-gray-300">Prioritizing the protection of minors, this legislation established age limits for marriage, heavily influenced by early women's social reform movements.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statute 2: 1954 -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">1954 • Republic of India</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Special Marriage Act</h4>
+                            <p class="text-sm text-gray-300">A cornerstone of secular family law, allowing individuals to marry outside their religious confines without requiring conversion, embodying constitutional liberty.</p>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-2" data-view="statutes" data-index="2"></div>
+                </div>
+
+                <!-- Statute 3: 1955-56 -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-1" data-view="statutes" data-index="3"></div>
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">1955-1956 • Post-Independence</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Family Law Codification</h4>
+                            <p class="text-sm text-gray-300">India's defining family law revolution. The Hindu Code Bills comprehensively structured laws regarding marriage, divorce, adoption, and inheritance under constitutional ideals.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statute 4: 1976 -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">1976 • Legislative Amendments</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Mutual Consent Divorce</h4>
+                            <p class="text-sm text-gray-300">Introduced into the Hindu Marriage Act and Special Marriage Act, this granted spouses autonomy in marital dissolution without the need to prove fault.</p>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-2" data-view="statutes" data-index="4"></div>
+                </div>
+
+                <!-- Statute 5: 2005 -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-24">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="relative md:col-start-1 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-1" data-view="statutes" data-index="5"></div>
+                    <div class="md:pl-16 relative md:col-start-2 flex flex-col justify-center order-2 md:order-2">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">2005 • Modern Reform</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Equal Coparcenary Rights</h4>
+                            <p class="text-sm text-gray-300">An amendment to the Hindu Succession Act that radically restructured inheritance, granting daughters gender-equal rights in ancestral property.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statute 6: Constitutional -->
+                <div class="era-item grid grid-cols-1 md:grid-cols-2 gap-8 relative mb-12">
+                    <div class="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 top-10 md:top-1/2 md:-translate-y-1/2 w-4 h-4 rounded-full z-10 glow-node"></div>
+                    <div class="md:text-right md:pr-16 relative md:col-start-1 flex flex-col justify-center order-2 md:order-1">
+                        <div class="glass-panel shader-target p-6 rounded-2xl w-full">
+                            <span class="text-accent font-bold text-sm">Present • The Modern Era</span>
+                            <h4 class="serif text-2xl text-white mt-1 mb-2">Constitutional Family Law</h4>
+                            <p class="text-sm text-gray-300">The current overarching framework prioritizing equality, dignity, and diverse families (Art 14, 15, 21), subjecting all religious and customary laws to strict constitutional scrutiny.</p>
+                        </div>
+                    </div>
+                    <div class="relative md:col-start-2 scene-anchor w-full h-64 md:h-auto min-h-[250px] md:min-h-[300px] order-1 md:order-2" data-view="statutes" data-index="6"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             AUTHOR / CREATED BY SECTION
+             ========================================== -->
+        <section class="pt-10 pb-20 px-6 md:px-8 max-w-4xl mx-auto relative z-10">
+            <div class="glass-panel shader-target p-8 md:p-12 rounded-3xl relative flex flex-col md:flex-row items-center gap-8 text-left w-full border-t border-accent">
+                <!-- Profile Image -->
+                <div class="flex-shrink-0 relative">
+                    <div class="absolute inset-0 bg-[var(--current-accent)] rounded-full blur-2xl opacity-20"></div>
+                    <img src="https://i.ibb.co/0j9rKhb9/IMG-2298.jpg" alt="Aalok Kumar Pandey" class="w-32 h-32 md:w-40 md:h-40 object-cover rounded-full border-4 border-accent shadow-[0_0_30px_var(--current-accent-glow)] relative z-10 transition-colors duration-1000">
+                </div>
+                
+                <!-- Details -->
+                <div class="flex-grow text-center md:text-left">
+                    <span class="text-accent font-bold tracking-widest text-xs uppercase mb-2 block">Created By</span>
+                    <h3 class="serif text-3xl md:text-4xl text-white mb-1">Aalok Kumar Pandey</h3>
+                    <p class="text-gray-400 text-sm md:text-base font-medium mb-4 tracking-wide">Registration: <span class="text-white">24BAL002</span></p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 border-t border-white/10 pt-6">
+                        <div>
+                            <p class="text-xs text-accent uppercase tracking-wider font-semibold mb-1">Submission For</p>
+                            <p class="text-sm text-gray-200">Family Law Creative Component</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-accent uppercase tracking-wider font-semibold mb-1">Subject</p>
+                            <p class="text-sm text-gray-200">Family Law 1</p>
+                        </div>
+                        <div class="md:col-span-2">
+                            <p class="text-xs text-accent uppercase tracking-wider font-semibold mb-1">Submitted To</p>
+                            <p class="text-sm text-gray-200">Dr. Sushil Goswami</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="py-12 text-center border-t border-white/10 bg-black/40 backdrop-blur-sm relative z-10">
+            <p class="serif italic text-gray-400 text-xl mb-4 px-4">"Law is the silent framework upon which the delicate tapestry of family rests."</p>
+            <p class="text-xs text-gray-600 uppercase tracking-widest">Procedural Realism WebGL Experience</p>
+        </footer>
+    </main>
+
+    <!-- Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+
+    <!-- Application Logic -->
+    <script>
+        // ==========================================
+        // 1. STATE & THEME MANAGEMENT
+        // ==========================================
+        const root = document.documentElement;
+        let currentView = 'main';
+
+        const themes = {
+            main: { bg: '#050a15', accent: '#d4af37', fog: 0x050a15, lightA: 0xd4af37, lightB: 0x4f46e5 },
+            cases: { bg: '#110505', accent: '#e11d48', fog: 0x110505, lightA: 0xe11d48, lightB: 0x94a3b8 },
+            statutes: { bg: '#02110a', accent: '#10b981', fog: 0x02110a, lightA: 0x10b981, lightB: 0xb45309 }
+        };
+
+        const lenis = new Lenis({ smoothWheel: true, smoothTouch: true, lerp: 0.1 });
+        lenis.on('scroll', ScrollTrigger.update);
+        lenis.on('scroll', (e) => {
+            const progress = isNaN(e.progress) ? 0 : e.progress;
+            document.getElementById("progress-bar").style.width = (progress * 100) + "%";
+        });
+
+        // ==========================================
+        // 2. THREE.JS SETUP & LIGHTING
+        // ==========================================
+        const container = document.getElementById('webgl-container');
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(themes.main.fog, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 25; camera.position.y = 2;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); scene.add(ambientLight);
+        const dirLightA = new THREE.DirectionalLight(themes.main.lightA, 3.5); 
+        dirLightA.position.set(20, 20, 10); 
+        dirLightA.castShadow = true;
+        dirLightA.shadow.camera.top = 20; dirLightA.shadow.camera.bottom = -20;
+        dirLightA.shadow.camera.left = -20; dirLightA.shadow.camera.right = 20;
+        scene.add(dirLightA);
+        
+        const dirLightB = new THREE.DirectionalLight(themes.main.lightB, 2.5); dirLightB.position.set(-20, -20, -10); scene.add(dirLightB);
+        const rimLight = new THREE.PointLight(0xffffff, 1.5, 50); rimLight.position.set(0, 10, 5); scene.add(rimLight);
+
+        // ==========================================
+        // 3. PROCEDURAL TEXTURE GENERATOR (REALISM)
+        // ==========================================
+        function createNoiseTexture(type) {
+            const size = 512;
+            const c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            const img = ctx.createImageData(size, size);
+            const data = img.data;
+
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    let idx = (y * size + x) * 4;
+                    let val = 128; 
+                    if (type === 'leather') val = Math.random() > 0.5 ? 100 + Math.random()*50 : 150 + Math.random()*50; 
+                    else if (type === 'wood') val = 128 + Math.sin(x * 0.05 + Math.random() * 20) * 40;
+                    else if (type === 'stone') val = Math.random() * 255;
+                    else if (type === 'pages_side') { val = (y % 4 < 2) ? 220 : 100; val += Math.random() * 30; } 
+                    else if (type === 'parchment') val = 180 + Math.sin(x*0.1)*20 + Math.cos(y*0.1)*20 + Math.random()*20;
+                    data[idx] = val; data[idx+1] = val; data[idx+2] = val; data[idx+3] = 255;
+                }
+            }
+            ctx.putImageData(img, 0, 0);
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        const bumpLeather = createNoiseTexture('leather');
+        const bumpWood = createNoiseTexture('wood');
+        const bumpStone = createNoiseTexture('stone');
+        const bumpPages = createNoiseTexture('pages_side');
+        const bumpParchment = createNoiseTexture('parchment');
+
+        const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.3 });
+        const silverMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.4 });
+        const bronzeMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.8, roughness: 0.5 });
+        const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x3e2723, roughness: 0.8, bumpMap: bumpWood, bumpScale: 0.05 });
+        const paperMat = new THREE.MeshStandardMaterial({ color: 0xfdf6e3, roughness: 0.9, bumpMap: bumpParchment, bumpScale: 0.02 });
+        const marbleMat = new THREE.MeshStandardMaterial({ color: 0x111625, metalness: 0.4, roughness: 0.6, bumpMap: bumpStone, bumpScale: 0.02, emissive: 0x0a0f1e });
+        const leatherMat = new THREE.MeshStandardMaterial({ color: 0x3d0c0c, roughness: 0.7, bumpMap: bumpLeather, bumpScale: 0.08 }); 
+        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x1a242f, roughness: 0.9, metalness: 0.1, bumpMap: bumpStone, bumpScale: 0.15 });
+
+        function enableShadows(obj) {
+            obj.traverse((child) => {
+                if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
+            });
+        }
+
+        // --- GLOBAL AMBIENT BACKGROUND ELEMENTS ---
+        const masterWrap = new THREE.Group(); scene.add(masterWrap);
+        
+        const main3DGroup = new THREE.Group();
+        const ringsGroup = new THREE.Group();
+        const ring1 = new THREE.Mesh(new THREE.TorusGeometry(4, 0.15, 32, 100), goldMat); const ring2 = new THREE.Mesh(new THREE.TorusGeometry(4, 0.15, 32, 100), goldMat);
+        ring1.position.x = -2; ring2.position.x = 2; ringsGroup.add(ring1, ring2); ringsGroup.position.set(-10, 5, -10);
+        
+        const scaleGroup = new THREE.Group();
+        const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.6, 12, 32), goldMat);
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 10, 32), goldMat); beam.position.y = 5; beam.rotation.z = Math.PI / 2;
+        const leftPan = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1, 0.2, 32), goldMat); leftPan.position.set(-4.8, -1, 0);
+        const rightPan = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1, 0.2, 32), goldMat); rightPan.position.set(4.8, -1, 0);
+        scaleGroup.add(stand, beam, leftPan, rightPan); scaleGroup.position.set(12, -5, -15); scaleGroup.rotation.y = -Math.PI / 6;
+        main3DGroup.add(ringsGroup, scaleGroup); 
+        
+        for(let i=0; i<25; i++) {
+            const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 25, 16), marbleMat);
+            pillar.position.set((Math.random()-0.5)*80, (Math.random()-0.5)*40, (Math.random()-0.5)*40 - 25);
+            pillar.rotation.set((Math.random()-0.5)*0.2, 0, (Math.random()-0.5)*0.2);
+            main3DGroup.add(pillar);
+        }
+        masterWrap.add(main3DGroup);
+
+        const cases3DGroup = new THREE.Group(); cases3DGroup.visible = false;
+        for(let i=0; i<15; i++) {
+            const gavelGrp = new THREE.Group();
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4, 16), darkWoodMat);
+            const head = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.5, 32), darkWoodMat); head.rotation.z = Math.PI/2; head.position.y = 2;
+            const silverBand = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.3, 32), silverMat); silverBand.rotation.z = Math.PI/2; silverBand.position.y = 2;
+            gavelGrp.add(handle, head, silverBand);
+            gavelGrp.position.set((Math.random()-0.5)*60, (Math.random()-0.5)*50, (Math.random()-0.5)*40 - 15);
+            gavelGrp.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+            cases3DGroup.add(gavelGrp);
+        }
+        for(let i=0; i<25; i++) {
+            const bookGrp = new THREE.Group();
+            const cover = new THREE.Mesh(new THREE.BoxGeometry(2, 2.8, 0.6), leatherMat);
+            const pages = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.7, 0.65), paperMat);
+            pages.position.x = 0.1; bookGrp.add(cover, pages);
+            bookGrp.position.set((Math.random()-0.5)*70, (Math.random()-0.5)*60, (Math.random()-0.5)*50 - 20);
+            bookGrp.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+            cases3DGroup.add(bookGrp);
+        }
+        masterWrap.add(cases3DGroup);
+
+        const statutes3DGroup = new THREE.Group(); statutes3DGroup.visible = false;
+        for(let i=0; i<20; i++) {
+            const scrollGrp = new THREE.Group();
+            const roll1 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4, 32), paperMat); const roll2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4, 32), paperMat);
+            roll1.position.x = -1; roll2.position.x = 1;
+            const cap1 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.2, 32), bronzeMat); cap1.position.set(-1, 2, 0);
+            const cap2 = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.2, 32), bronzeMat); cap2.position.set(1, 2, 0);
+            scrollGrp.add(roll1, roll2, cap1, cap2);
+            scrollGrp.position.set((Math.random()-0.5)*60, (Math.random()-0.5)*50, (Math.random()-0.5)*40 - 15);
+            scrollGrp.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+            statutes3DGroup.add(scrollGrp);
+        }
+        for(let i=0; i<20; i++) {
+            const tabletGrp = new THREE.Group();
+            const tabletGeo = new THREE.BoxGeometry(2.5, 3.5, 0.3);
+            const tablet = new THREE.Mesh(tabletGeo, stoneMat);
+            tabletGrp.add(tablet);
+            tabletGrp.position.set((Math.random()-0.5)*70, (Math.random()-0.5)*60, (Math.random()-0.5)*50 - 20);
+            tabletGrp.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+            statutes3DGroup.add(tabletGrp);
+        }
+        masterWrap.add(statutes3DGroup);
+
+        const particlesGeo = new THREE.BufferGeometry();
+        const particleCount = 8000;
+        const posArray = new Float32Array(particleCount * 3);
+        for(let i = 0; i < particleCount * 3; i++) posArray[i] = (Math.random() - 0.5) * 100; 
+        particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMat = new THREE.PointsMaterial({ size: 0.08, color: 0xffffff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
+        const particlesMesh = new THREE.Points(particlesGeo, particlesMat);
+        masterWrap.add(particlesMesh);
+
+        // ==========================================
+        // 4. DETAILED GEOMETRY GENERATORS 
+        // ==========================================
+        
+        function createEngravedMaterial(config) {
+            const canvasC = document.createElement('canvas'); canvasC.width = 512; canvasC.height = 512;
+            const ctxC = canvasC.getContext('2d');
+            const canvasB = document.createElement('canvas'); canvasB.width = 512; canvasB.height = 512;
+            const ctxB = canvasB.getContext('2d');
+            
+            ctxC.fillStyle = config.bg || '#ffffff'; ctxC.fillRect(0, 0, 512, 512);
+            ctxB.fillStyle = '#808080'; ctxB.fillRect(0, 0, 512, 512);
+
+            if (config.border) {
+                ctxC.strokeStyle = config.border; ctxC.lineWidth = 15; ctxC.strokeRect(20, 20, 472, 472);
+                ctxB.strokeStyle = config.engrave ? '#000000' : '#ffffff'; ctxB.lineWidth = 15; ctxB.strokeRect(20, 20, 472, 472);
+            }
+
+            const fontStr = config.font || 'bold 50px "Cormorant Garamond", serif';
+            ctxC.font = fontStr; ctxC.textAlign = 'center'; ctxC.textBaseline = 'middle';
+            ctxB.font = fontStr; ctxB.textAlign = 'center'; ctxB.textBaseline = 'middle';
+            
+            ctxC.fillStyle = config.color || '#000000';
+            ctxB.fillStyle = config.engrave ? '#000000' : '#ffffff'; 
+
+            if (config.lines) {
+                const lh = config.lineHeight || 70;
+                const startY = config.startY || (256 - ((config.lines.length - 1) * lh) / 2);
+                config.lines.forEach((line, i) => { ctxC.fillText(line, 256, startY + i * lh); ctxB.fillText(line, 256, startY + i * lh); });
+            } else if (config.text) {
+                ctxC.fillText(config.text, 256, 256); ctxB.fillText(config.text, 256, 256);
+            }
+            
+            const texC = new THREE.CanvasTexture(canvasC); const texB = new THREE.CanvasTexture(canvasB);
+            if(renderer.capabilities) { texC.anisotropy = renderer.capabilities.getMaxAnisotropy(); texB.anisotropy = renderer.capabilities.getMaxAnisotropy(); }
+            
+            return new THREE.MeshStandardMaterial({
+                map: texC, bumpMap: texB, bumpScale: config.bumpScale || 0.05,
+                roughness: config.roughness || 0.8, metalness: config.metalness || 0.1, color: config.baseTint || 0xffffff
+            });
+        }
+
+        function createGavelGeo() {
+            const headPoints = [];
+            for(let i=0; i<=20; i++) {
+                let x = i/20 * 3 - 1.5; let r = 0.6 - Math.pow(x/1.5, 2)*0.1; 
+                if (Math.abs(x) > 1.3) r -= 0.1; headPoints.push(new THREE.Vector2(r, x));
+            }
+            return new THREE.LatheGeometry(headPoints, 32);
+        }
+
+        function createAnvilGeo() {
+            const shape = new THREE.Shape();
+            shape.moveTo(-1.5, -1); shape.lineTo(1.5, -1); shape.lineTo(1.2, -0.5); shape.lineTo(0.5, -0.5);
+            shape.lineTo(0.5, 0.5); shape.lineTo(2.0, 0.5); shape.quadraticCurveTo(2.5, 0.7, 2.8, 1); 
+            shape.lineTo(-1.8, 1); shape.lineTo(-1.8, 0.5); shape.lineTo(-0.5, 0.5);
+            shape.lineTo(-0.5, -0.5); shape.lineTo(-1.2, -0.5); shape.lineTo(-1.5, -1);
+            const geo = new THREE.ExtrudeGeometry(shape, { depth: 1.2, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05 });
+            geo.center(); return geo;
+        }
+
+        function createBookCoverGeo() {
+            const shape = new THREE.Shape();
+            shape.moveTo(2.5, 0); shape.lineTo(-0.5, 0); shape.absarc(-0.5, -0.4, 0.4, Math.PI/2, Math.PI*1.5, false);
+            shape.lineTo(2.5, -0.8); shape.lineTo(2.5, -0.7); shape.lineTo(-0.5, -0.7); shape.absarc(-0.5, -0.4, 0.3, Math.PI*1.5, Math.PI/2, true); 
+            shape.lineTo(2.5, -0.1); shape.lineTo(2.5, 0);
+            const geo = new THREE.ExtrudeGeometry(shape, { depth: 3.5, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02 });
+            geo.center(); return geo;
+        }
+
+        function createTabletGeo() {
+            const shape = new THREE.Shape();
+            shape.moveTo(-1.5, -2); shape.lineTo(1.5, -2); shape.lineTo(1.5, 1);
+            shape.absarc(0, 1, 1.5, 0, Math.PI, false); shape.lineTo(-1.5, -2);
+            const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.5, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.05, bevelThickness: 0.05 });
+            geo.center(); return geo;
+        }
+
+        function makeDetailedBook(title) {
+            const group = new THREE.Group();
+            const coverGeo = createBookCoverGeo();
+            const matFront = createEngravedMaterial({bg: '#3d0c0c', color: '#d4af37', border: '#d4af37', lines: [title, '', 'LAW REPORTS'], font: 'bold 45px serif', engrave: false, bumpScale: 0.2, roughness: 0.7});
+            const cover = new THREE.Mesh(coverGeo, [matFront, leatherMat]); cover.rotation.x = Math.PI / 2;
+            const matPages = new THREE.MeshStandardMaterial({ color: 0xfdf6e3, bumpMap: bumpPages, bumpScale: 0.1, roughness: 1.0 });
+            const pages = new THREE.Mesh(new THREE.BoxGeometry(2.7, 3.4, 0.6), matPages); pages.position.set(0.1, 0, 0); 
+            group.add(cover, pages); enableShadows(group); return group;
+        }
+
+        function makeDetailedGavel(title) {
+            const group = new THREE.Group();
+            const block = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.2, 0.5, 32), darkWoodMat); block.position.y = -2;
+            const blockRing = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.05, 16, 32), goldMat); blockRing.position.y = -2; blockRing.rotation.x = Math.PI/2;
+            const plaqueMat = createEngravedMaterial({bg: '#d4af37', color: '#000000', text: title, font: 'bold 40px sans-serif', engrave: true, metalness: 0.8, roughness: 0.3});
+            const plaque = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.6, 0.1), [goldMat, goldMat, goldMat, goldMat, plaqueMat, goldMat]);
+            plaque.position.set(0, -1.6, 2.2); plaque.rotation.x = -Math.PI / 8;
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 4, 16), darkWoodMat); handle.position.set(0, 0, 1.5); handle.rotation.x = Math.PI/2;
+            const head = new THREE.Mesh(createGavelGeo(), darkWoodMat); head.rotation.z = Math.PI/2; 
+            const sBand1 = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.08, 16, 32), silverMat); sBand1.rotation.y = Math.PI/2; sBand1.position.x = 0.8;
+            const sBand2 = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.08, 16, 32), silverMat); sBand2.rotation.y = Math.PI/2; sBand2.position.x = -0.8;
+            group.add(block, blockRing, plaque, handle, head, sBand1, sBand2);
+            enableShadows(group); return group;
+        }
+
+        function makeDetailedTablet(title, lines) {
+            const group = new THREE.Group();
+            const matFront = createEngravedMaterial({bg: '#1a242f', color: '#88929b', lines: [title, '-----------'].concat(lines), font: 'bold 35px sans-serif', engrave: true, bumpScale: 0.2, roughness: 0.9});
+            const body = new THREE.Mesh(createTabletGeo(), [stoneMat, matFront]);
+            const base = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.5, 1.2), stoneMat); base.position.y = -2.25;
+            group.add(body, base); enableShadows(group); return group;
+        }
+
+        function makeDetailedScroll(title) {
+            const group = new THREE.Group();
+            const matFront = createEngravedMaterial({bg: '#fdf6e3', color: '#222222', font: 'italic 40px serif', lines: [title, '', 'It is hereby', 'enacted and', 'codified...'], engrave: true, bumpScale: 0.05, roughness: 1.0});
+            const paperShape = new THREE.Shape();
+            paperShape.moveTo(-1.5, -0.2); paperShape.quadraticCurveTo(0, 0.2, 1.5, 0.2); paperShape.lineTo(1.5, 0.1); paperShape.quadraticCurveTo(0, 0.1, -1.5, -0.3);
+            const paperGeo = new THREE.ExtrudeGeometry(paperShape, { depth: 4, curveSegments: 32, bevelEnabled: false }); paperGeo.center();
+            const paper = new THREE.Mesh(paperGeo, [paperMat, matFront]); paper.rotation.x = Math.PI/2;
+            const roll1 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 4.2, 32), paperMat); roll1.position.set(-1.5, 0, 0);
+            const stick1 = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 5, 16), darkWoodMat); stick1.position.set(-1.5, 0, 0);
+            const roll2 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 4.2, 32), paperMat); roll2.position.set(1.5, 0, 0);
+            const stick2 = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 5, 16), darkWoodMat); stick2.position.set(1.5, 0, 0);
+            group.add(paper, roll1, stick1, roll2, stick2); enableShadows(group); return group;
+        }
+
+        function makeIndianFlag() {
+            const group = new THREE.Group();
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 6, 16), goldMat); pole.position.y = 0;
+            const base1 = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 0.4, 32), darkWoodMat); base1.position.y = -3;
+            const base2 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 0.4, 32), darkWoodMat); base2.position.y = -3.4;
+            const finial = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), goldMat); finial.position.y = 3.1;
+            
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 341; 
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#FF9933'; ctx.fillRect(0, 0, 512, 114); 
+            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 114, 512, 113); 
+            ctx.fillStyle = '#138808'; ctx.fillRect(0, 227, 512, 114); 
+            
+            const cx = 256; const cy = 171; const r = 45;
+            ctx.strokeStyle = '#000080'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+            ctx.lineWidth = 2;
+            for(let i = 0; i < 24; i++) {
+                const angle = (i * Math.PI * 2) / 24;
+                ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r); ctx.stroke();
+            }
+            const flagTex = new THREE.CanvasTexture(canvas);
+            if(renderer.capabilities) flagTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            const flagMat = new THREE.MeshStandardMaterial({ map: flagTex, bumpMap: bumpParchment, bumpScale: 0.02, roughness: 0.8, side: THREE.DoubleSide });
+            const flagGeo = new THREE.PlaneGeometry(3, 2, 32, 16);
+            const pos = flagGeo.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i); const distFromPole = x + 1.5; 
+                const z = Math.sin(distFromPole * 2.5) * (distFromPole * 0.15); 
+                pos.setZ(i, z);
+            }
+            flagGeo.computeVertexNormals();
+            const cloth = new THREE.Mesh(flagGeo, flagMat); cloth.position.set(1.5, 1.8, 0); 
+            group.add(pole, base1, base2, finial, cloth); enableShadows(group); return group;
+        }
+        
+        function makeDiverseRings() {
+            const group = new THREE.Group();
+            const r1 = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.2, 16, 64), goldMat); r1.rotation.x = Math.PI / 2;
+            const r2 = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.2, 16, 64), silverMat); r2.rotation.y = Math.PI / 3; r2.position.x = 1;
+            const r3 = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.2, 16, 64), bronzeMat); r3.rotation.y = -Math.PI / 3; r3.position.x = -1;
+            group.add(r1, r2, r3); enableShadows(group); return group;
+        }
+
+        // Main Router for anchored models
+        function createThematicModel(view, index) {
+            let group = new THREE.Group();
+            const rubyMat = new THREE.MeshStandardMaterial({ color: 0x990022, roughness: 0.2, metalness: 0.5 });
+
+            if (view === 'main') {
+                if (index === 0) { 
+                    const matFront = createEngravedMaterial({bg: '#0f172a', color: '#d4af37', lines: ['CODE OF', 'HAMMURABI', '1750 BC'], font: 'bold 50px sans-serif', engrave: true, bumpScale: 0.1});
+                    const slab = new THREE.Mesh(new THREE.BoxGeometry(2, 4.5, 0.8), [stoneMat, stoneMat, stoneMat, stoneMat, matFront, stoneMat]); group.add(slab);
+                } else if (index === 1) { 
+                    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.3, 16, 32), goldMat); ring.rotation.x = Math.PI / 2; group.add(ring);
+                    for(let i=0; i<6; i++) {
+                        const angle = (i / 6) * Math.PI * 2;
+                        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.8, 16), goldMat); spike.position.set(Math.cos(angle)*1.5, 0.9, Math.sin(angle)*1.5);
+                        spike.rotation.x = Math.sin(angle) * 0.2; spike.rotation.z = -Math.cos(angle) * 0.2;
+                        const jewel = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), rubyMat); jewel.position.copy(spike.position); jewel.position.y += 0.9;
+                        group.add(spike, jewel);
+                    }
+                } else if (index === 2) { 
+                    const anvil = new THREE.Mesh(createAnvilGeo(), stoneMat);
+                    const base = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.8, 1.5), darkWoodMat); base.position.y = -1.0;
+                    group.add(anvil, base);
+                } else if (index === 3) {
+                    group = makeIndianFlag();
+                } else if (index === 4) { 
+                    const matFront = createEngravedMaterial({bg: '#b45309', color: '#3e2723', text: 'CIVIL RIGHTS', engrave: true, metalness: 0.6, roughness: 0.4});
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.2, 1), [bronzeMat, bronzeMat, bronzeMat, bronzeMat, matFront, bronzeMat]);
+                    const shackle = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.25, 16, 32, Math.PI), silverMat); shackle.position.y = 1.1;
+                    group.add(body, shackle);
+                } else if (index === 5) { 
+                    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 4, 16), goldMat);
+                    const head = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.2, 16, 32), goldMat); head.position.y = 2.5;
+                    const tooth1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.2), goldMat); tooth1.position.set(0.5, -1.5, 0);
+                    const tooth2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.2), goldMat); tooth2.position.set(0.5, -0.8, 0);
+                    const topRing = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.1, 16, 32), goldMat); topRing.position.y = 3.5;
+                    group.add(shaft, head, tooth1, tooth2, topRing);
+                } else if (index === 6) {
+                    group = makeDiverseRings(); 
+                }
+                enableShadows(group);
+            } else if (view === 'cases') {
+                if (index === 0) group = makeDetailedBook("Hyde v. Hyde");
+                else if (index === 1) group = makeDetailedGavel("SHAH BANO");
+                else if (index === 2) group = makeDetailedBook("White v. White");
+                else if (index === 3) group = makeDetailedGavel("INDRA SARMA");
+                else if (index === 4) group = makeDetailedBook("Shayara Bano");
+                else if (index === 5) group = makeDetailedGavel("NAVTEJ JOHAR");
+                else if (index === 6) group = makeDetailedBook("Vineeta Sharma");
+                else if (index === 7) group = makeDetailedGavel("SUPRIYO v UOI");
+            } else if (view === 'statutes') {
+                if (index === 0) group = makeDetailedScroll("WIDOWS' ACT");
+                else if (index === 1) group = makeDetailedTablet("SARDA ACT", ['1929', 'PROTECTION', 'OF MINORS']);
+                else if (index === 2) group = makeDetailedScroll("SPECIAL MARRIAGE"); 
+                else if (index === 3) group = makeIndianFlag(); 
+                else if (index === 4) group = makeDetailedScroll("MUTUAL CONSENT");
+                else if (index === 5) group = makeDetailedTablet("HSA AMENDMENT", ['2005', 'COPARCENARY', 'RIGHTS']);
+                else if (index === 6) group = makeDetailedScroll("CONSTITUTIONAL ERA");
+            }
+            
+            group.userData = { view: view, baseRotX: (Math.random() * 0.2) - 0.1, baseRotY: (Math.random() * 0.4) - 0.2 };
+            group.rotation.set(group.userData.baseRotX, group.userData.baseRotY, 0);
+            return group;
+        }
+
+        const domLinkedGroup = new THREE.Group();
+        scene.add(domLinkedGroup); 
+
+        const anchorElements = document.querySelectorAll('.scene-anchor');
+        const anchoredModels = [];
+
+        anchorElements.forEach(el => {
+            const view = el.getAttribute('data-view');
+            const index = parseInt(el.getAttribute('data-index'));
+            const model = createThematicModel(view, index);
+            domLinkedGroup.add(model);
+            anchoredModels.push({ el, model });
+        });
+
+        // ==========================================
+        // 5. POST-PROCESSING (THE LIQUID GLASS SHADER)
+        // ==========================================
+        
+        let renderTarget = new THREE.WebGLRenderTarget(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
+        const MAX_BOXES = 36; 
+        const boxUniforms = new Float32Array(MAX_BOXES * 4); 
+
+        const postScene = new THREE.Scene();
+        const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        
+        const postMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                tDiffuse: { value: renderTarget.texture },
+                uResolution: { value: new THREE.Vector2(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio()) },
+                uBoxes: { value: boxUniforms },
+                uBoxCount: { value: 0 },
+                uThemeColor: { value: new THREE.Color(themes.main.accent) }
+            },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`,
+            fragmentShader: `
+                precision mediump float;
+                uniform sampler2D tDiffuse;
+                uniform vec2 uResolution;
+                uniform vec4 uBoxes[${MAX_BOXES}];
+                uniform int uBoxCount;
+                uniform vec3 uThemeColor;
+                varying vec2 vUv;
+
+                void main() {
+                    vec2 uv = vUv;
+                    vec2 fragCoord = uv * uResolution;
+                    vec4 finalColor = texture2D(tDiffuse, uv);
+                    
+                    for(int i = 0; i < ${MAX_BOXES}; i++) {
+                        if(i >= uBoxCount) break;
+                        vec4 box = uBoxes[i]; 
+                        
+                        float padding = 40.0; 
+                        if (fragCoord.x > box.x - padding && fragCoord.x < box.x + box.z + padding &&
+                            fragCoord.y > box.y - padding && fragCoord.y < box.y + box.w + padding) {
+                            
+                            vec2 boxCenter = vec2(box.x + box.z * 0.5, box.y + box.w * 0.5);
+                            vec2 halfSize = box.zw * 0.5;
+                            vec2 m2 = fragCoord - boxCenter;
+                            
+                            float minSide = min(halfSize.x, halfSize.y);
+                            vec2 flatArea = max(halfSize - minSide, vec2(0.0));
+                            vec2 cornerPos = max(abs(m2) - flatArea, vec2(0.0));
+                            vec2 normCorner = cornerPos / minSide;
+                            
+                            float roundedBox = pow(normCorner.x, 6.0) + pow(normCorner.y, 6.0);
+                            
+                            if (roundedBox < 1.5) { 
+                                float rb1 = 1.0 - smoothstep(0.95, 1.0, roundedBox); 
+                                float rb2 = smoothstep(0.65, 1.0, roundedBox) - smoothstep(1.0, 1.15, roundedBox); 
+                                float rb3 = smoothstep(0.3, 0.85, roundedBox); 
+                                
+                                if (rb1 > 0.0 || rb2 > 0.0) {
+                                    vec2 normalizedLocalM2 = m2 / halfSize; 
+                                    vec2 lensOffset = normalizedLocalM2 * (1.0 - roundedBox) * 0.035; 
+                                    vec2 lensUv = uv + lensOffset;
+                                    
+                                    vec4 blurColor = vec4(0.0);
+                                    float total = 0.0;
+                                    float blurRadius = 2.0; 
+                                    for (float x = -2.0; x <= 2.0; x++) {
+                                        for (float y = -2.0; y <= 2.0; y++) {
+                                            vec2 offset = vec2(x, y) * blurRadius / uResolution;
+                                            blurColor += texture2D(tDiffuse, lensUv + offset);
+                                            total += 1.0;
+                                        }
+                                    }
+                                    blurColor /= total;
+                                    
+                                    blurColor.rgb *= 0.55;
+                                    blurColor.rgb = mix(blurColor.rgb, vec3(0.02, 0.03, 0.05), 0.4); 
+                                    
+                                    float gradientY = (normalizedLocalM2.y + 1.0) * 0.5; 
+                                    vec3 lighting = blurColor.rgb + vec3(rb1) * gradientY * 0.05 + vec3(rb2) * uThemeColor * 0.9 - vec3(rb3) * 0.15; 
+                                                  
+                                    vec4 liquidColor = vec4(lighting, 1.0);
+                                    finalColor = mix(finalColor, liquidColor, smoothstep(1.20, 0.95, roundedBox)); 
+                                }
+                            }
+                        }
+                    }
+                    gl_FragColor = finalColor;
+                }
+            `
+        });
+        const postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial);
+        postScene.add(postQuad);
+
+        // ==========================================
+        // 6. DOM-TO-WEBGL TRACKING & PROJECTION
+        // ==========================================
+        function trackDOMBoxes() {
+            const targets = document.querySelectorAll('.shader-target');
+            let count = 0; const dpr = renderer.getPixelRatio();
+            targets.forEach((el) => {
+                if (count >= MAX_BOXES) return;
+                const rect = el.getBoundingClientRect();
+                if(rect.top > window.innerHeight || rect.bottom < 0) return;
+                boxUniforms[count*4 + 0] = rect.left * dpr;
+                boxUniforms[count*4 + 1] = (window.innerHeight - rect.bottom) * dpr; 
+                boxUniforms[count*4 + 2] = rect.width * dpr;
+                boxUniforms[count*4 + 3] = rect.height * dpr;
+                count++;
+            });
+            postMaterial.uniforms.uBoxCount.value = count;
+        }
+
+        const projectionVec = new THREE.Vector3();
+
+        function updateAnchoredModels(t) {
+            const isMobile = window.innerWidth < 768;
+            const targetZDepth = isMobile ? 18 : 12;
+            const targetScale = isMobile ? 0.6 : 1.0; 
+
+            anchoredModels.forEach((item, i) => {
+                if (item.model.userData.view !== currentView) {
+                    item.model.visible = false;
+                    return;
+                }
+                const rect = item.el.getBoundingClientRect();
+                
+                if (rect.width === 0 || rect.height === 0 || rect.top > window.innerHeight || rect.bottom < 0) {
+                    item.model.visible = false;
+                    return;
+                }
+                item.model.visible = true;
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+
+                projectionVec.set((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1, 0.5);
+                projectionVec.unproject(camera);
+                projectionVec.sub(camera.position).normalize();
+                
+                const distance = (targetZDepth - camera.position.z) / projectionVec.z;
+                item.model.position.copy(camera.position).add(projectionVec.multiplyScalar(distance));
+                
+                item.model.scale.set(targetScale, targetScale, targetScale);
+
+                item.model.position.y += Math.sin(t * 2 + i) * 0.4;
+                item.model.rotation.x = item.model.userData.baseRotX + Math.sin(t * 0.5) * 0.1;
+                item.model.rotation.y += 0.005;
+            });
+        }
+
+        // ==========================================
+        // 7. MAIN ANIMATION LOOP
+        // ==========================================
+        let mouseX = 0, mouseY = 0, targetX = 0, targetY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX - window.innerWidth / 2); mouseY = (e.clientY - window.innerHeight / 2);
+        });
+
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            const t = clock.getElapsedTime();
+
+            targetX = mouseX * 0.001; targetY = mouseY * 0.001;
+            masterWrap.rotation.y += 0.05 * (targetX - masterWrap.rotation.y);
+            masterWrap.rotation.x += 0.05 * (targetY - masterWrap.rotation.x);
+
+            if(main3DGroup.visible) {
+                ring1.rotation.x = t * 0.4; ring1.rotation.y = t * 0.6;
+                ring2.rotation.x = t * 0.5; ring2.rotation.y = t * 0.3;
+                const sway = Math.sin(t * 1.5) * 0.08;
+                beam.rotation.z = (Math.PI / 2) + sway;
+                leftPan.position.y = -1 + Math.sin(t * 1.5) * 0.38; rightPan.position.y = -1 - Math.sin(t * 1.5) * 0.38;
+                
+                main3DGroup.children.forEach((g, i) => {
+                    if (i > 1) { g.rotation.x += 0.001 * (i%3 ? 1 : -1); g.rotation.y += 0.002; g.position.y += Math.sin(t + i) * 0.01; }
+                });
+            }
+            if(cases3DGroup.visible) {
+                cases3DGroup.children.forEach((g, i) => {
+                    g.rotation.x += 0.005 * (i%2 ? 1 : -1); g.rotation.y += 0.002; g.position.y += Math.sin(t * 2 + i) * 0.01;
+                });
+            }
+            if(statutes3DGroup.visible) {
+                statutes3DGroup.children.forEach((g, i) => {
+                    g.rotation.z += 0.003 * (i%2 ? 1 : -1); g.rotation.x += 0.002; g.position.x += Math.sin(t + i) * 0.01;
+                });
+            }
+            particlesMesh.rotation.y = t * 0.015;
+
+            trackDOMBoxes();
+            updateAnchoredModels(t);
+
+            renderer.setRenderTarget(renderTarget); renderer.clear(); renderer.render(scene, camera);
+            renderer.setRenderTarget(null); renderer.clear(); renderer.render(postScene, postCamera);
+        }
+        
+        gsap.ticker.add((time) => {
+            lenis.raf(time * 1000);
+            animate();
+        });
+
+        // ==========================================
+        // 8. RESIZE & ROUTING LOGIC
+        // ==========================================
+        window.addEventListener('resize', () => {
+            const w = window.innerWidth; const h = window.innerHeight; const dpr = Math.min(window.devicePixelRatio, 2);
+            camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+            renderTarget.setSize(w * dpr, h * dpr); postMaterial.uniforms.uResolution.value.set(w * dpr, h * dpr);
+        });
+
+        function initScrollAnimations(viewId) {
+            ScrollTrigger.getAll().forEach(t => t.kill());
+
+            gsap.set(masterWrap.position, {y: 0, z: 0}); gsap.set(masterWrap.rotation, {z: 0});
+
+            gsap.to(masterWrap.position, {
+                y: 35, z: 20, ease: "none",
+                scrollTrigger: { trigger: "body", start: "top top", end: "bottom bottom", scrub: 1 }
+            });
+            gsap.to(masterWrap.rotation, {
+                z: Math.PI * 0.25, ease: "none",
+                scrollTrigger: { trigger: "body", start: "top top", end: "bottom bottom", scrub: 1.5 }
+            });
+
+            const eras = gsap.utils.toArray(`#${viewId} .era-item`);
+            eras.forEach((era, i) => {
+                const isDesktop = window.innerWidth > 768;
+                const xOffset = isDesktop ? (i % 2 === 0 ? -100 : 100) : 0;
+                gsap.fromTo(era, 
+                    { x: xOffset, y: 50, opacity: 0 },
+                    { scrollTrigger: { trigger: era, start: "top 85%", toggleActions: "play none none reverse" }, x: 0, y: 0, opacity: 1, duration: 1.2, ease: "power3.out" }
+                );
+            });
+        }
+
+        // SMOOTH CROSSFADE & SCROLL TRANSITION
+        let isTransitioning = false;
+
+        window.switchView = function(viewName) {
+            if(currentView === viewName || isTransitioning) return;
+            isTransitioning = true;
+            
+            const oldView = document.getElementById(`view-${currentView}`);
+            const newView = document.getElementById(`view-${viewName}`);
+            const t = themes[viewName];
+
+            // 1. Smooth Scroll to Top
+            lenis.scrollTo(0, { duration: 1.2, ease: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
+
+            const tl = gsap.timeline({ onComplete: () => isTransitioning = false });
+
+            // 2. Camera pulls back slightly for cinematic effect
+            tl.to(camera.position, { z: 30, duration: 0.6, ease: "power2.in" }, 0);
+
+            // 3. Fade out old view
+            tl.to(oldView, { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 0)
+              .call(() => {
+                  oldView.style.display = 'none';
+                  oldView.classList.remove('active');
+                  
+                  root.style.setProperty('--current-bg', t.bg); 
+                  root.style.setProperty('--current-accent', t.accent);
+
+                  main3DGroup.visible = (viewName === 'main');
+                  cases3DGroup.visible = (viewName === 'cases');
+                  statutes3DGroup.visible = (viewName === 'statutes');
+
+                  const backBtn = document.getElementById('back-button');
+                  if(viewName !== 'main') backBtn.classList.add('visible'); 
+                  else backBtn.classList.remove('visible');
+
+                  currentView = viewName;
+                  newView.style.display = 'block';
+                  
+                  initScrollAnimations(`view-${viewName}`);
+              })
+              // 4. Push camera back in & morph colors smoothly
+              .to(camera.position, { z: 25, duration: 1.2, ease: "power2.out" }, 0.6)
+              .to(postMaterial.uniforms.uThemeColor.value, { r: new THREE.Color(t.accent).r, g: new THREE.Color(t.accent).g, b: new THREE.Color(t.accent).b, duration: 1.2, ease: "power2.out" }, 0.6)
+              .to(scene.fog.color, { r: new THREE.Color(t.fog).r, g: new THREE.Color(t.fog).g, b: new THREE.Color(t.fog).b, duration: 1.2, ease: "power2.out" }, 0.6)
+              .to(dirLightA.color, { r: new THREE.Color(t.lightA).r, g: new THREE.Color(t.lightA).g, b: new THREE.Color(t.lightA).b, duration: 1.2, ease: "power2.out" }, 0.6)
+              .to(dirLightB.color, { r: new THREE.Color(t.lightB).r, g: new THREE.Color(t.lightB).g, b: new THREE.Color(t.lightB).b, duration: 1.2, ease: "power2.out" }, 0.6)
+              // 5. Fade in new view
+              .to(newView, { opacity: 1, duration: 0.8, ease: "power2.out" }, 0.8)
+              .call(() => {
+                  newView.classList.add('active');
+              });
+        };
+
+        // INITIAL LOAD WITH LOADER FADEOUT
+        window.onload = () => { 
+            const loaderBar = document.getElementById('loader-bar');
+            const loader = document.getElementById('loader');
+            
+            // Wait for textures to process, then animate bar
+            gsap.to(loaderBar, { 
+                width: '100%', 
+                duration: 1.8, 
+                ease: 'power3.inOut',
+                onComplete: () => {
+                    // Fade out loader
+                    loader.style.opacity = '0';
+                    setTimeout(() => {
+                        loader.style.display = 'none';
+                        initScrollAnimations('view-main');
+                        
+                        // Entrance animation for hero content
+                        gsap.from("#view-main header h1, #view-main header p", {
+                            y: 30,
+                            opacity: 0,
+                            duration: 1.2,
+                            stagger: 0.2,
+                            ease: "power3.out"
+                        });
+                    }, 800); 
+                }
+            });
+        };
+
+    </script>
+</body>
+</html>
